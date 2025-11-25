@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<!--
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  サブアセンブリビューア
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【新しいサブアセンブリの追加方法】
+このファイルの中頃（418行目付近）に詳細な手順書があります。
+<script>タグ内の先頭部分を参照してください。
+
+【必要なファイル】
+- ○○.csv（サブアセンブリ名とURL）
+- ○○.txt（SVGファイル）
+- ○○_コード.csv（コード情報）
+
+【Claudeへの依頼例】
+「このHTMLファイルに新しいサブアセンブリを追加してください。
+ ファイル内の手順書に従って、添付したCSVとSVGから追加してください。」
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+-->
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>サブアセンブリビューア</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'MS Gothic', 'Hiragino Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .top-bar {
+            background-color: #1976d2;
+            padding: 12px 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 4px 8px;
+            line-height: 1;
+            transition: background-color 0.2s;
+            border-radius: 4px;
+        }
+        .menu-toggle:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .top-bar-title {
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0;
+        }
+        .sidebar {
+            position: fixed;
+            left: -350px;
+            top: 0;
+            width: 350px;
+            height: 100vh;
+            background-color: white;
+            box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+            transition: left 0.3s ease;
+            z-index: 200;
+            overflow-y: auto;
+        }
+        .sidebar.open {
+            left: 0;
+        }
+        .sidebar-header {
+            background-color: #1976d2;
+            color: white;
+            padding: 16px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sidebar-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            line-height: 1;
+        }
+        .sidebar-item {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .sidebar-item:hover {
+            background-color: #f5f5f5;
+        }
+        .sidebar-item.active {
+            background-color: #e3f2fd;
+            border-left: 4px solid #1976d2;
+            padding-left: 16px;
+        }
+        .sidebar-item-name {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 12px;
+        }
+        .sidebar-item-preview {
+            width: 100%;
+            height: 120px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            background-color: #fafafa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sidebar-item-preview svg {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 150;
+            display: none;
+        }
+        .overlay.visible {
+            display: block;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .header {
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .header a {
+            color: #1976d2;
+            text-decoration: none;
+        }
+        .header a:hover {
+            text-decoration: underline;
+        }
+        .content {
+            display: flex;
+            gap: 30px;
+        }
+        .svg-container {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            background-color: #fafafa;
+            overflow: auto;
+        }
+        .svg-container svg {
+            max-width: 100%;
+            height: auto;
+        }
+        .svg-container svg text {
+            cursor: pointer;
+            transition: fill 0.2s;
+        }
+        .svg-container svg text:hover {
+            fill: #1976d2;
+            font-weight: bold;
+        }
+        .svg-container svg text.highlighted {
+            fill: #d32f2f;
+            font-weight: bold;
+        }
+        .svg-container svg text.highlighted tspan {
+            fill: #d32f2f;
+        }
+        .info-panel {
+            width: 400px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 0;
+            background-color: white;
+            overflow: hidden;
+        }
+        .info-panel-header {
+            background-color: #fff;
+            padding: 16px 20px;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-panel-header-icon {
+            font-size: 24px;
+            color: #d32f2f;
+            font-weight: normal;
+        }
+        .info-panel-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .info-panel-content {
+            padding: 20px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .selected-element-box {
+            background-color: #fce4ec;
+            border-left: 4px solid #d32f2f;
+            padding: 16px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .selected-element-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+        .selected-element {
+            font-size: 32px;
+            font-weight: bold;
+            color: #d32f2f;
+            margin: 0;
+        }
+        .code-item {
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #f0f0f0;
+            position: relative;
+        }
+        .code-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .code-badge {
+            display: inline-block;
+            background-color: #d32f2f;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 4px 10px;
+            border-radius: 3px;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+        .code-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+        .code-jpname {
+            font-size: 15px;
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 8px;
+            margin-top: 8px;
+        }
+        .code-description {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .copy-button {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        .copy-button:hover {
+            background-color: #e0e0e0;
+            border-color: #bbb;
+        }
+        .copy-button:active {
+            background-color: #d0d0d0;
+        }
+        .copy-button.copied {
+            background-color: #4caf50;
+            border-color: #4caf50;
+            color: white;
+        }
+        .no-selection {
+            color: #999;
+            font-style: italic;
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .tooltip {
+            position: fixed;
+            background-color: rgba(33, 33, 33, 0.95);
+            color: white;
+            padding: 14px 18px;
+            border-radius: 6px;
+            font-size: 13px;
+            line-height: 1.6;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 350px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+            display: none;
+        }
+        .tooltip.visible {
+            display: block;
+        }
+        .tooltip-element {
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #ff5252;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 8px;
+        }
+        .tooltip-item {
+            margin-bottom: 10px;
+        }
+        .tooltip-item:last-child {
+            margin-bottom: 0;
+        }
+        .tooltip .code-badge {
+            display: inline-block;
+            background-color: #ff5252;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 8px;
+            border-radius: 3px;
+            margin-bottom: 4px;
+        }
+        .tooltip .tooltip-code-name {
+            font-weight: bold;
+            color: #fff;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .tooltip .tooltip-jpname {
+            font-weight: bold;
+            color: #ddd;
+            font-size: 12px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .tooltip .tooltip-description {
+            color: #bbb;
+            font-size: 11px;
+            margin-top: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
+        <h2 class="top-bar-title">サブアセンブリビューア</h2>
+    </div>
+
+    <div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <span>サブアセンブリ一覧</span>
+            <button class="sidebar-close" onclick="closeSidebar()">×</button>
+        </div>
+        <div id="sidebarItems">
+            <!-- メニュー項目はJavaScriptで自動生成されます -->
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header" id="header">
+            <h1 id="assemblyTitle">サブアセンブリ名: 側溝</h1>
+            <div>
+                <strong>URL: </strong>
+                <a href="" target="_blank" rel="noopener noreferrer" id="assemblyUrl"></a>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="svg-container" id="svgContainer"></div>
+
+            <div class="info-panel">
+                <div class="info-panel-header">
+                    <div class="info-panel-header-icon">ⓘ</div>
+                    <h3>詳細情報</h3>
+                </div>
+                <div class="info-panel-content" id="infoContent">
+                    <div class="no-selection">
+                        SVG内のP1、L1などのテキストにカーソルを当てるとツールチップが表示されます。クリックすると、この情報パネルに固定表示されます。
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // ========================================
+        // ★ 新しいサブアセンブリの追加方法 ★
+        // ========================================
+        // 
+        // 新しいサブアセンブリを追加するには、以下の3つのステップを実行してください。
+        // 
+        // 【ステップ1】menuOrder に新しいIDを追加
+        // 【ステップ2】previewSVGs に簡略版SVGを追加
+        // 【ステップ3】subassemblies に完全なデータを追加
+        // 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 【ステップ1】menuOrder の編集
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 
+        // menuOrder配列に新しいサブアセンブリのIDを追加します。
+        // IDは半角英数字（例：'newitem'）で、わかりやすい名前にしてください。
+        // 配列の順番が、サイドバーメニューの表示順序になります。
+        // 
+        // 例）新しいサブアセンブリ「test」を3番目に追加する場合：
+        // const menuOrder = ['sokko', 'uchigawa', 'test', 'moridohoumen', 'kiridohoumen', 'rokata'];
+        // 
+        // ★★★ メニューの表示順序はここで管理 ★★★
+        const menuOrder = ['uchigawa', 'rokata' , 'moridohoumen', 'kiridohoumen', 'sokko'];
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 【ステップ2】previewSVGs の編集
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 
+        // サイドバーに表示する簡略版SVGを追加します。
+        // 元のSVGから<text>要素を削除し、主要な線だけを残したものにしてください。
+        // 
+        // 追加方法：
+        // 1. 元のSVGファイル（.txt）から<svg>タグ全体をコピー
+        // 2. <text>要素をすべて削除
+        // 3. <style>内の不要なクラスを削除
+        // 4. viewBox属性とstyle="width: 280px; height: 100px;"を確認
+        // 5. 下記の形式で追加
+        // 
+        // test: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 XXX YYY" style="width: 280px; height: 100px;">
+        //     <style>.cls-3{fill:none;stroke:red;...}</style>
+        //     <line class="cls-3" ... />
+        //     <polyline class="cls-3" ... />
+        // </svg>`,
+        // 
+        // プレビュー用のSVG（簡略版）
+        const previewSVGs = {
+            sokko: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 655.78 446.44" style="width: 280px; height: 100px;">
+                <style>.cls-3{fill:none;stroke:red;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}</style>
+                <polyline class="cls-3" points=".42 260.24 233.1 210.08 336.06 416.36 511.14 416.36 626.22 183.8"/>
+                <line class="cls-3" x1="253.62" y1="251.36" x2="289.74" y2="251.36"/>
+                <line class="cls-3" x1="559.26" y1="251.36" x2="592.74" y2="251.36"/>
+                <line class="cls-3" x1="289.74" y1="251.36" x2="354.06" y2="380.12"/>
+                <polyline class="cls-3" points="354.06 380.12 495.42 380.12 559.26 251.36"/>
+            </svg>`,
+            uchigawa: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650.68 431.9" style="width: 280px; height: 100px;">
+                <style>.cls-3{fill:none;stroke:red;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}</style>
+                <line class="cls-3" x1="43.56" y1="402.56" x2="595.68" y2="431.48"/>
+                <line class="cls-3" x1="43.56" y1="311.24" x2="595.68" y2="340.16"/>
+                <line class="cls-3" x1="43.56" y1="264.32" x2="595.68" y2="293.24"/>
+                <line class="cls-3" x1="43.56" y1="228.32" x2="595.68" y2="257.24"/>
+                <polyline class="cls-3" points="43.56 402.56 43.56 197.96 595.68 226.88 595.68 431.48"/>
+            </svg>`,
+            moridohoumen: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 568.32 501.16" style="width: 280px; height: 100px;">
+                <style>.cls-3{fill:none;stroke:red;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}.cls-4{fill:none;stroke:gray;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}</style>
+                <line class="cls-4" x1=".42" y1="139.04" x2="155.1" y2="154.4"/>
+                <polyline class="cls-4" points=".42 170.12 75.9 177.68 75.9 146.6"/>
+                <polyline class="cls-3" points="155.1 154.4 247.86 280.76 315.06 273.8 407.94 400.28 475.14 393.32 530.94 469.4"/>
+                <line class="cls-4" x1="493.98" y1="473.84" x2="567.9" y2="464.96"/>
+            </svg>`,
+            kiridohoumen: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 599.88 487.46" style="width: 280px; height: 100px;">
+                <style>.cls-3{fill:none;stroke:red;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}.cls-4{fill:none;stroke:gray;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}</style>
+                <line class="cls-4" x1=".42" y1="445.76" x2="165.54" y2="462.2"/>
+                <polyline class="cls-4" points=".42 479 81.06 487.04 81.06 453.8"/>
+                <polyline class="cls-3" points="560.1 105.56 507.42 177.32 435.54 184.76 336.54 319.76 264.66 327.2 165.54 462.2"/>
+                <line class="cls-4" x1="520.62" y1="110.36" x2="599.46" y2="100.88"/>
+            </svg>`,
+            rokata: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 668.94 424.96" style="width: 280px; height: 100px;">
+                <style>.cls-3{fill:none;stroke:red;stroke-linecap:round;stroke-linejoin:round;stroke-width:.84px}</style>
+                <line class="cls-3" x1="47.16" y1="179.24" x2="362.28" y2="223.52"/>
+                <line class="cls-3" x1="47.16" y1="206.84" x2="362.28" y2="251.12"/>
+                <line class="cls-3" x1="47.16" y1="234.44" x2="362.28" y2="278.72"/>
+                <line class="cls-3" x1="47.16" y1="289.76" x2="362.28" y2="334.04"/>
+                <polyline class="cls-3" points="47.16 179.24 47.16 361.64 362.28 405.92 362.28 223.52 638.64 313.28"/>
+            </svg>`
+        };
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 【ステップ3】subassemblies の編集
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 
+        // 完全なサブアセンブリデータを追加します。
+        // 
+        // 構造：
+        // test: {
+        //     name: '表示名（日本語）',
+        //     url: 'AutodeskのヘルプURL',
+        //     svg: `完全なSVG（<text>要素を含む）`,
+        //     codes: {
+        //         'P1': [ コードデータの配列 ],
+        //         'L1': [ コードデータの配列 ],
+        //         ...
+        //     }
+        // }
+        // 
+        // ■ name の記載方法：
+        // サブアセンブリの正式名称を日本語で記載してください。
+        // 例：name: '側溝'
+        // 
+        // ■ url の記載方法：
+        // CSVファイルのURL列の値をそのままコピーしてください。
+        // 例：url: 'https://help.autodesk.com/view/CIV3D/2026/JPN/?guid=...'
+        // 
+        // ■ svg の記載方法：
+        // 1. TXTファイル（SVG）の内容を全てコピー
+        // 2. バッククォート ` で囲む
+        // 3. <style>タグは必ず含める（フォントやスタイル定義が含まれる）
+        // 4. <text>要素も全て含める（クリック・ホバー対象になる）
+        // 
+        // ■ codes の記載方法：
+        // _コード.csv ファイルから以下の手順でデータを作成します：
+        // 
+        // 1. CSVの「NO」列の値（P1, L1など）をキーにする
+        // 2. 同じNOを持つ行を配列にまとめる
+        // 3. 各行は { code: '', jpCode: '', description: '' } の形式
+        // 
+        // 例）CSVが以下の場合：
+        // NO,コード,日本語コード,説明
+        // P1,ETW,車道端,車道端の説明
+        // P1,Crown,クラウン,クラウンの説明
+        // L1,Top,トップ,トップの説明
+        // 
+        // ↓ このように記載：
+        // codes: {
+        //     'P1': [
+        //         { code: 'ETW', jpCode: '車道端', description: '車道端の説明' },
+        //         { code: 'Crown', jpCode: 'クラウン', description: 'クラウンの説明' }
+        //     ],
+        //     'L1': [
+        //         { code: 'Top', jpCode: 'トップ', description: 'トップの説明' }
+        //     ]
+        // }
+        // 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 【実装例】
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 
+        // 新しいサブアセンブリ「test」を追加する完全な例：
+        // 
+        // 1. menuOrder に追加：
+        //    const menuOrder = ['sokko', 'test', 'uchigawa', ...];
+        // 
+        // 2. previewSVGs に追加：
+        //    const previewSVGs = {
+        //        sokko: `...`,
+        //        test: `<svg xmlns="..." viewBox="0 0 500 300" style="width: 280px; height: 100px;">
+        //            <style>.cls-3{fill:none;stroke:red;...}</style>
+        //            <line class="cls-3" x1="0" y1="0" x2="100" y2="100"/>
+        //        </svg>`,
+        //        uchigawa: `...`,
+        //    };
+        // 
+        // 3. subassemblies に追加：
+        //    const subassemblies = {
+        //        sokko: { ... },
+        //        test: {
+        //            name: 'テストアセンブリ',
+        //            url: 'https://help.autodesk.com/...',
+        //            svg: `<svg id="_レイヤー_1" ...>完全なSVG</svg>`,
+        //            codes: {
+        //                'P1': [
+        //                    { code: 'Test_Code', jpCode: 'テストコード', description: 'テストの説明' }
+        //                ]
+        //            }
+        //        },
+        //        uchigawa: { ... },
+        //    };
+        // 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 【注意事項】
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 
+        // ● IDは半角英数字のみ（日本語不可）
+        // ● カンマ（,）の付け忘れに注意
+        // ● バッククォート（`）とシングルクォート（'）を間違えない
+        // ● 既存のデータを参考にすると間違いが少ない
+        // 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // データ定義
+        const subassemblies = {
+            sokko: {
+                name: '側溝',
+                url: 'https://help.autodesk.com/view/CIV3D/2026/JPN/?guid=GUID-38C5A1F5-0310-48E1-87F2-03C73F330691',
+                svg: `<svg id="_レイヤー_1" data-name="レイヤー 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 655.78 446.44">
+                    <defs>
+                        <style>
+                            .cls-1 { font-size: 25.14px; }
+                            .cls-1, .cls-2 { font-family: MS-Gothic, 'MS Gothic'; }
+                            .cls-3 { fill: none; stroke: red; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-2 { font-size: 43.11px; }
+                        </style>
+                    </defs>
+                    <text class="cls-2" transform="translate(277.38 37.04)"><tspan x="0" y="0">側溝</tspan></text>
+                    <g>
+                        <polyline class="cls-3" points=".42 260.24 233.1 210.08 336.06 416.36 511.14 416.36 626.22 183.8"/>
+                        <line class="cls-3" x1="253.62" y1="251.36" x2="289.74" y2="251.36"/>
+                        <line class="cls-3" x1="559.26" y1="251.36" x2="592.74" y2="251.36"/>
+                        <line class="cls-3" x1="289.74" y1="251.36" x2="354.06" y2="380.12"/>
+                        <polyline class="cls-3" points="354.06 380.12 495.42 380.12 559.26 251.36"/>
+                        <text class="cls-1" transform="translate(229.62 274.76)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(296.82 246.92)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(530.34 246.92)"><tspan x="0" y="0">P5</tspan></text>
+                        <text class="cls-1" transform="translate(598.38 268.28)"><tspan x="0" y="0">P6</tspan></text>
+                        <text class="cls-1" transform="translate(220.98 203.96)"><tspan x="0" y="0">P10</tspan></text>
+                        <text class="cls-1" transform="translate(613.74 176.72)"><tspan x="0" y="0">P11</tspan></text>
+                        <text class="cls-1" transform="translate(261.18 246.44)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(327.54 317.6)"><tspan x="0" y="0">L2</tspan></text>
+                        <text class="cls-1" transform="translate(415.38 376.28)"><tspan x="0" y="0">L3</tspan></text>
+                        <text class="cls-1" transform="translate(498.54 317.6)"><tspan x="0" y="0">L4</tspan></text>
+                        <text class="cls-1" transform="translate(564.54 246.44)"><tspan x="0" y="0">L5</tspan></text>
+                        <text class="cls-1" transform="translate(74.7 267.44)"><tspan x="0" y="0">L9</tspan></text>
+                        <text class="cls-1" transform="translate(202.02 245.24)"><tspan x="0" y="0">L10</tspan></text>
+                        <text class="cls-1" transform="translate(618.06 226.76)"><tspan x="0" y="0">L11</tspan></text>
+                        <text class="cls-1" transform="translate(263.7 353.48)"><tspan x="0" y="0">L6</tspan></text>
+                        <text class="cls-1" transform="translate(411.54 443)"><tspan x="0" y="0">L7</tspan></text>
+                        <text class="cls-1" transform="translate(560.7 350.12)"><tspan x="0" y="0">L8</tspan></text>
+                        <text class="cls-1" transform="translate(416.7 409.64)"><tspan x="0" y="0">S1</tspan></text>
+                    </g>
+                </svg>`,
+                codes: {
+                    'P1': [{ code: 'Ditch_Back', jpCode: '排水溝_裏面', description: '側溝サブアセンブリの水路背面の頂点' }],
+                    'P6': [{ code: 'Ditch_Back', jpCode: '排水溝_裏面', description: '側溝サブアセンブリの水路背面の頂点' }],
+                    'P2': [{ code: 'Ditch_Face', jpCode: '排水溝_表面', description: '側溝サブアセンブリの水路表面の頂点' }],
+                    'P5': [{ code: 'Ditch_Face', jpCode: '排水溝_表面', description: '側溝サブアセンブリの水路表面の頂点' }],
+                    'P10': [{ code: 'Ditch_In', jpCode: '排水溝_内側', description: '排水溝内側端部' }],
+                    'P11': [{ code: 'Ditch_Out', jpCode: '排水溝_外側', description: '排水溝外側端部' }],
+                    'L9': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L10': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L11': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L1': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Ditch_Top', jpCode: '排水溝_上部', description: '水路表面のリンク' }
+                    ],
+                    'L2': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Ditch_Top', jpCode: '排水溝_上部', description: '水路表面のリンク' }
+                    ],
+                    'L3': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Ditch_Top', jpCode: '排水溝_上部', description: '水路表面のリンク' }
+                    ],
+                    'L4': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Ditch_Top', jpCode: '排水溝_上部', description: '水路表面のリンク' }
+                    ],
+                    'L5': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Ditch_Top', jpCode: '排水溝_上部', description: '水路表面のリンク' }
+                    ],
+                    'L6': [
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' },
+                        { code: 'Ditch_Bottom', jpCode: '排水溝_下部', description: '水路下面(背面)のリンク' }
+                    ],
+                    'L7': [
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' },
+                        { code: 'Ditch_Bottom', jpCode: '排水溝_下部', description: '水路下面(背面)のリンク' }
+                    ],
+                    'L8': [
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' },
+                        { code: 'Ditch_Bottom', jpCode: '排水溝_下部', description: '水路下面(背面)のリンク' }
+                    ],
+                    'S1': [{ code: 'Ditch', jpCode: '排水溝', description: '排水溝断面領域' }]
+                }
+            },
+            uchigawa: {
+                name: '内側横断勾配摺り付け車線',
+                url: 'https://help.autodesk.com/view/CIV3D/2026/JPN/?guid=GUID-305D48F3-D0FE-4FE7-A9B3-9C8FD194971A',
+                svg: `<svg id="_レイヤー_1" data-name="レイヤー 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 650.68 431.9">
+                    <defs>
+                        <style>
+                            .cls-1 { font-size: 25.14px; }
+                            .cls-1, .cls-2 { font-family: MS-Gothic, 'MS Gothic'; }
+                            .cls-3 { fill: none; stroke: red; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-2 { font-size: 43.11px; }
+                        </style>
+                    </defs>
+                    <g>
+                        <line class="cls-3" x1="43.56" y1="402.56" x2="595.68" y2="431.48"/>
+                        <line class="cls-3" x1="43.56" y1="311.24" x2="595.68" y2="340.16"/>
+                        <line class="cls-3" x1="43.56" y1="264.32" x2="595.68" y2="293.24"/>
+                        <line class="cls-3" x1="43.56" y1="228.32" x2="595.68" y2="257.24"/>
+                        <polyline class="cls-3" points="43.56 402.56 43.56 197.96 595.68 226.88 595.68 431.48"/>
+                    </g>
+                    <text class="cls-1" transform="translate(0 203.96)"><tspan x="0" y="0">P1</tspan></text>
+                    <g>
+                        <text class="cls-1" transform="translate(0 242.72)"><tspan x="0" y="0">P3</tspan></text>
+                        <text class="cls-1" transform="translate(0 278.6)"><tspan x="0" y="0">P5</tspan></text>
+                        <text class="cls-1" transform="translate(0 331.16)"><tspan x="0" y="0">P7</tspan></text>
+                        <text class="cls-1" transform="translate(0 397.52)"><tspan x="0" y="0">P9</tspan></text>
+                        <text class="cls-1" transform="translate(612.96 233)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(612.96 271.64)"><tspan x="0" y="0">P4</tspan></text>
+                        <text class="cls-1" transform="translate(612.96 307.52)"><tspan x="0" y="0">P6</tspan></text>
+                        <text class="cls-1" transform="translate(612.96 360.08)"><tspan x="0" y="0">P8</tspan></text>
+                        <text class="cls-1" transform="translate(612.96 426.44)"><tspan x="0" y="0">P10</tspan></text>
+                        <text class="cls-1" transform="translate(124.92 196.88)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(124.92 228.56)"><tspan x="0" y="0">L2</tspan></text>
+                        <text class="cls-1" transform="translate(124.92 260.96)"><tspan x="0" y="0">L3</tspan></text>
+                        <text class="cls-1" transform="translate(124.92 303.2)"><tspan x="0" y="0">L4</tspan></text>
+                        <text class="cls-1" transform="translate(124.92 390.44)"><tspan x="0" y="0">L5</tspan></text>
+                        <text class="cls-1" transform="translate(323.28 236.48)"><tspan x="0" y="0">S1</tspan></text>
+                        <text class="cls-1" transform="translate(323.28 268.88)"><tspan x="0" y="0">S2</tspan></text>
+                        <text class="cls-1" transform="translate(323.28 311.24)"><tspan x="0" y="0">S3</tspan></text>
+                        <text class="cls-1" transform="translate(323.28 398.48)"><tspan x="0" y="0">S4</tspan></text>
+                        <text class="cls-2" transform="translate(63.24 37.04)"><tspan x="0" y="0">内側横断勾配摺り付け車線</tspan></text>
+                    </g>
+                </svg>`,
+                codes: {
+                    'P1': [
+                        { code: 'ETW', jpCode: '車道端', description: '車道端(表層上の内側と外側)' },
+                        { code: 'Crown', jpCode: 'クラウン', description: '車道中心（拝み勾配）中心位置' }
+                    ],
+                    'P2': [{ code: 'Lane', jpCode: '車線', description: '分離道路における車線の外側端部' }],
+                    'P3': [
+                        { code: 'ETW_Pave1', jpCode: '車道端_表層1', description: '表層1の車道端部' },
+                        { code: 'Crown_Pave1', jpCode: 'クラウン_表層1', description: '表層1上のクラウンポイント' }
+                    ],
+                    'P4': [{ code: 'Lane_Pave1', jpCode: '車線_表層1', description: '分離道路の表層1における車線の外側端部' }],
+                    'P5': [
+                        { code: 'ETW_Pave2', jpCode: '車道端_表層2', description: '表層2の車道端部' },
+                        { code: 'Crown_Pave2', jpCode: 'クラウン_表層2', description: '表層2上のクラウンポイント' }
+                    ],
+                    'P6': [{ code: 'Lane_Pave2', jpCode: '車線_表層2', description: '分離道路の表層2における車線の外側端部' }],
+                    'P7': [
+                        { code: 'ETW_Base', jpCode: '車道端_基層', description: '基層上の車道端部' },
+                        { code: 'Crown_Base', jpCode: 'クラウン_基盤', description: '基盤上のクラウンポイント' }
+                    ],
+                    'P8': [{ code: 'Lane_Base', jpCode: '車線_基層', description: '分離道路の基層における車線の外側端部' }],
+                    'P9': [
+                        { code: 'ETW _Sub', jpCode: '---', description: '路盤層上における走行車線の端' },
+                        { code: 'Crown_Sub', jpCode: 'クラウン_路盤', description: '路盤上のクラウンポイント' }
+                    ],
+                    'P10': [{ code: 'Lane_Sub', jpCode: '車線_路盤', description: '分離道路の基層における車線の外側端部' }],
+                    'L1': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Pave', jpCode: '表層', description: '表層' }
+                    ],
+                    'L2': [{ code: 'Pave1', jpCode: '表層1', description: '舗装断面の2番目の舗装面' }],
+                    'L3': [{ code: 'Pave2', jpCode: '表層2', description: '舗装断面の3番目の舗装面' }],
+                    'L4': [{ code: 'Base', jpCode: '基層', description: '基層面' }],
+                    'L5': [
+                        { code: 'SubBase', jpCode: '路盤', description: '路盤面' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'S1': [{ code: 'Pave1', jpCode: '表層1', description: '舗装断面の2番目の舗装面' }],
+                    'S2': [{ code: 'Pave2', jpCode: '表層2', description: '舗装断面の3番目の舗装面' }],
+                    'S3': [{ code: 'Base', jpCode: '基層', description: '基層面' }],
+                    'S4': [{ code: 'SubBase', jpCode: '路盤', description: '路盤面' }]
+                }
+            },
+            moridohoumen: {
+                name: '小段付き法面展開(盛土)',
+                url: 'https://help.autodesk.com/view/CIV3D/2026/JPN/?guid=GUID-B86ACDEC-9D8E-4946-BE8B-12AB461CB561',
+                svg: `<svg id="_レイヤー_1" data-name="レイヤー 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 568.32 501.16">
+                    <defs>
+                        <style>
+                            .cls-1 { font-size: 25.14px; }
+                            .cls-1, .cls-2 { font-family: MS-Gothic, 'MS Gothic'; }
+                            .cls-3 { stroke: red; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-4 { stroke: gray; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-2 { font-size: 43.11px; }
+                        </style>
+                    </defs>
+                    <text class="cls-2" transform="translate(55.02 37.04)"><tspan x="0" y="0">小段付き法面展開(盛土)</tspan></text>
+                    <g>
+                        <line class="cls-4" x1=".42" y1="139.04" x2="155.1" y2="154.4"/>
+                        <polyline class="cls-4" points=".42 170.12 75.9 177.68 75.9 146.6"/>
+                        <polyline class="cls-3" points="155.1 154.4 247.86 280.76 315.06 273.8 407.94 400.28 475.14 393.32 530.94 469.4"/>
+                        <line class="cls-4" x1="493.98" y1="473.84" x2="567.9" y2="464.96"/>
+                        <text class="cls-1" transform="translate(142.02 138.08)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(352.62 258.8)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(514.98 384.2)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(314.46 258.8)"><tspan x="0" y="0">P3</tspan></text>
+                        <text class="cls-1" transform="translate(476.94 384.2)"><tspan x="0" y="0">P3</tspan></text>
+                        <text class="cls-1" transform="translate(226.86 313.52)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(382.74 424.52)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(525.06 497.72)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(209.94 217.28)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(266.46 270.8)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(364.98 330.8)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(425.7 389.6)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(515.82 435.2)"><tspan x="0" y="0">L2</tspan></text>
+                    </g>
+                </svg>`,
+                codes: {
+                    'P1': [
+                        { code: 'Hinge', jpCode: 'ヒンジ', description: '法面のヒンジポイント' },
+                        { code: 'Hinge_Fill', jpCode: '法面開始ポイント_盛土', description: '盛土法面開始位置' }
+                    ],
+                    'P2': [
+                        { code: 'Daylight', jpCode: '法面全体', description: '切土または盛土の法面展開ポイント' },
+                        { code: 'Daylight_Fill', jpCode: '法面_盛土', description: '盛土法面ポイント' },
+                        { code: 'Bench_In', jpCode: '小段_内側', description: '小段内側端' }
+                    ],
+                    'P3': [
+                        { code: 'Bench_Out', jpCode: '小段_外側', description: '小段外側端' }
+                    ],
+                    'L1': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L2': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' },
+                        { code: 'Daylight', jpCode: '法面全体', description: '切土または盛土の法面展開ポイント' },
+                        { code: 'Daylight_Fill', jpCode: '法面_盛土', description: '盛土法面ポイント' }
+                    ]
+                }
+            },
+            kiridohoumen: {
+                name: '小段付き法面展開(切土)',
+                url: 'https://help.autodesk.com/view/CIV3D/2026/JPN/?guid=GUID-B86ACDEC-9D8E-4946-BE8B-12AB461CB561',
+                svg: `<svg id="_レイヤー_1" data-name="レイヤー 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 599.88 487.46">
+                    <defs>
+                        <style>
+                            .cls-1 { font-size: 25.14px; }
+                            .cls-1, .cls-2 { font-family: MS-Gothic, 'MS Gothic'; }
+                            .cls-3 { stroke: red; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-4 { stroke: gray; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-2 { font-size: 43.11px; }
+                        </style>
+                    </defs>
+                    <text class="cls-2" transform="translate(76.98 37.04)"><tspan x="0" y="0">小段付き法面展開(切土)</tspan></text>
+                    <g>
+                        <line class="cls-4" x1=".42" y1="445.76" x2="165.54" y2="462.2"/>
+                        <polyline class="cls-4" points=".42 479 81.06 487.04 81.06 453.8"/>
+                        <polyline class="cls-3" points="560.1 105.56 507.42 177.32 435.54 184.76 336.54 319.76 264.66 327.2 165.54 462.2"/>
+                        <line class="cls-4" x1="520.62" y1="110.36" x2="599.46" y2="100.88"/>
+                        <text class="cls-1" transform="translate(137.94 444.08)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(391.86 342.44)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(559.26 200.24)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(351.06 342.44)"><tspan x="0" y="0">P3</tspan></text>
+                        <text class="cls-1" transform="translate(518.46 200.24)"><tspan x="0" y="0">P3</tspan></text>
+                        <text class="cls-1" transform="translate(240.18 323)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(402.42 182.84)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(549.78 96.68)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(183.78 392.48)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(288.66 315.2)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(354.18 251.96)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(454.02 175.16)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(503.34 139.04)"><tspan x="0" y="0">L2</tspan></text>
+                    </g>
+                </svg>`,
+                codes: {
+                    'P1': [
+                        { code: 'Hinge', jpCode: 'ヒンジ', description: '法面のヒンジポイント' },
+                        { code: 'Hinge_Cut', jpCode: '法面開始ポイント_切土', description: '切土の法面開始位置' }
+                    ],
+                    'P2': [
+                        { code: 'Daylight', jpCode: '法面全体', description: '切土または盛土の法面展開ポイント' },
+                        { code: 'Daylight_Cut', jpCode: '法面_切土', description: '切土法面ポイント' },
+                        { code: 'Bench_In', jpCode: '小段_内側', description: '小段内側端' }
+                    ],
+                    'P3': [
+                        { code: 'Bench_Out', jpCode: '小段_外側', description: '小段外側端' }
+                    ],
+                    'L1': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L2': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' },
+                        { code: 'Daylight', jpCode: '法面全体', description: '切土または盛土の法面展開ポイント' },
+                        { code: 'Daylight_Cut', jpCode: '法面_切土', description: '切土法面ポイント' }
+                    ]
+                }
+            },
+            rokata: {
+                name: '路肩(路盤垂直)',
+                url: 'https://help.autodesk.com/view/CIV3D/2026/JPN/?guid=GUID-64EF067D-63AC-45A9-BA00-2A15FB85335D',
+                svg: `<svg id="_レイヤー_1" data-name="レイヤー 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 668.94 424.96">
+                    <defs>
+                        <style>
+                            .cls-1 { font-size: 25.14px; }
+                            .cls-1, .cls-2 { font-family: MS-Gothic, 'MS Gothic'; }
+                            .cls-3 { fill: none; stroke: red; stroke-linecap: round; stroke-linejoin: round; stroke-width: .84px; }
+                            .cls-2 { font-size: 43.11px; }
+                        </style>
+                    </defs>
+                    <text class="cls-2" transform="translate(177.6 37.04)"><tspan x="0" y="0">路肩(路盤垂直)</tspan></text>
+                    <g>
+                        <line class="cls-3" x1="47.16" y1="179.24" x2="362.28" y2="223.52"/>
+                        <line class="cls-3" x1="47.16" y1="206.84" x2="362.28" y2="251.12"/>
+                        <line class="cls-3" x1="47.16" y1="234.44" x2="362.28" y2="278.72"/>
+                        <line class="cls-3" x1="47.16" y1="289.76" x2="362.28" y2="334.04"/>
+                        <polyline class="cls-3" points="47.16 179.24 47.16 361.64 362.28 405.92 362.28 223.52 638.64 313.28"/>
+                        <text class="cls-1" transform="translate(0 176)"><tspan x="0" y="0">P1</tspan></text>
+                        <text class="cls-1" transform="translate(0 215)"><tspan x="0" y="0">P4</tspan></text>
+                        <text class="cls-1" transform="translate(0 249.08)"><tspan x="0" y="0">P6</tspan></text>
+                        <text class="cls-1" transform="translate(0 296.12)"><tspan x="0" y="0">P8</tspan></text>
+                        <text class="cls-1" transform="translate(0 363.68)"><tspan x="0" y="0">P10</tspan></text>
+                        <text class="cls-1" transform="translate(367.44 213.44)"><tspan x="0" y="0">P2</tspan></text>
+                        <text class="cls-1" transform="translate(367.44 266.84)"><tspan x="0" y="0">P5</tspan></text>
+                        <text class="cls-1" transform="translate(367.44 301.64)"><tspan x="0" y="0">P7</tspan></text>
+                        <text class="cls-1" transform="translate(367.44 344)"><tspan x="0" y="0">P9</tspan></text>
+                        <text class="cls-1" transform="translate(367.44 421.52)"><tspan x="0" y="0">P11</tspan></text>
+                        <text class="cls-1" transform="translate(643.8 308)"><tspan x="0" y="0">P3</tspan></text>
+                        <text class="cls-1" transform="translate(117 179.48)"><tspan x="0" y="0">L1</tspan></text>
+                        <text class="cls-1" transform="translate(117 214.52)"><tspan x="0" y="0">L3</tspan></text>
+                        <text class="cls-1" transform="translate(117 241.64)"><tspan x="0" y="0">L4</tspan></text>
+                        <text class="cls-1" transform="translate(117 283.28)"><tspan x="0" y="0">L5</tspan></text>
+                        <text class="cls-1" transform="translate(117 361.52)"><tspan x="0" y="0">L6</tspan></text>
+                        <text class="cls-1" transform="translate(197.52 224.96)"><tspan x="0" y="0">S1</tspan></text>
+                        <text class="cls-1" transform="translate(197.52 253.64)"><tspan x="0" y="0">S2</tspan></text>
+                        <text class="cls-1" transform="translate(197.52 299.6)"><tspan x="0" y="0">S3</tspan></text>
+                        <text class="cls-1" transform="translate(197.52 371.96)"><tspan x="0" y="0">S4</tspan></text>
+                        <text class="cls-1" transform="translate(494.64 259.52)"><tspan x="0" y="0">L2</tspan></text>
+                    </g>
+                </svg>`,
+                codes: {
+                    'P2': [
+                        { code: 'EPS', jpCode: '路肩端', description: '舗装された路肩端' }
+                    ],
+                    'P3': [
+                        { code: 'ES_Unpaved', jpCode: '---', description: '未舗装路肩の端' }
+                    ],
+                    'P5': [
+                        { code: 'EPS_Pave1', jpCode: '路肩端_表層1', description: '表層1上の舗装路肩端' }
+                    ],
+                    'P7': [
+                        { code: 'EPS_Pave2', jpCode: '路肩端_表層2', description: '表層2上の舗装路肩端' }
+                    ],
+                    'P9': [
+                        { code: 'EPS_Base', jpCode: '---', description: '基層上の舗装路肩の端' }
+                    ],
+                    'P11': [
+                        { code: 'EPS_Sub', jpCode: '路肩端_路盤', description: '路盤上の路肩端' }
+                    ],
+                    'L1': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Pave', jpCode: '表層', description: '表層' }
+                    ],
+                    'L2': [
+                        { code: 'Top', jpCode: 'トップ', description: '舗装や法面の表面部分' },
+                        { code: 'Pave', jpCode: '表層', description: '表層' }
+                    ],
+                    'L3': [
+                        { code: 'Pave1', jpCode: '表層1', description: '舗装断面の2番目の舗装面' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L4': [
+                        { code: 'Pave2', jpCode: '表層2', description: '舗装断面の3番目の舗装面' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L5': [
+                        { code: 'Base', jpCode: '基層', description: '基層面' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'L6': [
+                        { code: 'SubBase', jpCode: '路盤', description: '路盤面' },
+                        { code: 'Datum', jpCode: 'データム', description: '路盤や未舗装横断の表層' }
+                    ],
+                    'S1': [
+                        { code: 'Pave1', jpCode: '表層1', description: '舗装断面の2番目の舗装面' }
+                    ],
+                    'S2': [
+                        { code: 'Pave2', jpCode: '表層2', description: '舗装断面の3番目の舗装面' }
+                    ],
+                    'S3': [
+                        { code: 'Base', jpCode: '基層', description: '基層面' }
+                    ],
+                    'S4': [
+                        { code: 'SubBase', jpCode: '路盤', description: '路盤面' }
+                    ]
+                }
+            }
+        };
+
+        let currentSubassembly = 'sokko';
+        let highlightedElement = null;
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('overlay');
+        const svgContainer = document.getElementById('svgContainer');
+        const infoContent = document.getElementById('infoContent');
+        const tooltip = document.getElementById('tooltip');
+
+        // サイドバーメニューを生成
+        function generateSidebarMenu() {
+            const sidebarItems = document.getElementById('sidebarItems');
+            sidebarItems.innerHTML = '';
+            
+            menuOrder.forEach((key, index) => {
+                const data = subassemblies[key];
+                const isActive = key === currentSubassembly ? 'active' : '';
+                
+                const itemHTML = `
+                    <div class="sidebar-item ${isActive}" onclick="selectSubassembly('${key}')">
+                        <div class="sidebar-item-name">${data.name}</div>
+                        <div class="sidebar-item-preview">
+                            ${previewSVGs[key]}
+                        </div>
+                    </div>
+                `;
+                
+                sidebarItems.innerHTML += itemHTML;
+            });
+        }
+
+        function toggleSidebar() {
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('visible');
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove('open');
+            overlay.classList.remove('visible');
+        }
+
+        function selectSubassembly(key) {
+            currentSubassembly = key;
+            const data = subassemblies[key];
+            
+            // サイドバーのアクティブ状態を更新
+            generateSidebarMenu();
+            
+            // サイドバーを閉じる
+            closeSidebar();
+            
+            // ヘッダーを更新
+            document.getElementById('assemblyTitle').textContent = 'サブアセンブリ名: ' + data.name;
+            const urlElement = document.getElementById('assemblyUrl');
+            urlElement.href = data.url;
+            urlElement.textContent = data.url;
+            
+            // SVGを更新
+            svgContainer.innerHTML = data.svg;
+            
+            // ハイライトをリセット
+            highlightedElement = null;
+            
+            // 情報パネルをリセット
+            infoContent.innerHTML = '<div class="no-selection">SVG内のP1、L1などのテキストにカーソルを当てるとツールチップが表示されます。クリックすると、この情報パネルに固定表示されます。</div>';
+            
+            // ツールチップを非表示
+            tooltip.classList.remove('visible');
+        }
+
+        function renderInfoPanel(element) {
+            const data = subassemblies[currentSubassembly].codes[element];
+            if (!data) return;
+
+            let html = `
+                <div class="selected-element-box">
+                    <div class="selected-element-label">選択項目</div>
+                    <div class="selected-element">${element}</div>
+                </div>
+            `;
+
+            data.forEach((item, index) => {
+                html += `
+                    <div class="code-item">
+                        <div class="code-badge">CODE</div>
+                        <div class="code-header">
+                            <div class="code-name">${item.code}</div>
+                            <button class="copy-button" onclick="copyToClipboard('${item.code}', this)">コピー</button>
+                        </div>
+                        <div class="code-jpname">${item.jpCode}</div>
+                        <div class="code-description">${item.description}</div>
+                    </div>
+                `;
+            });
+
+            infoContent.innerHTML = html;
+        }
+
+        function highlightElement(textElement) {
+            if (highlightedElement) {
+                highlightedElement.classList.remove('highlighted');
+            }
+            textElement.classList.add('highlighted');
+            highlightedElement = textElement;
+        }
+
+        function copyToClipboard(code, button) {
+            navigator.clipboard.writeText(code).then(() => {
+                button.textContent = 'コピー済み';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.textContent = 'コピー';
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('コピーに失敗しました:', err);
+                button.textContent = '失敗';
+                setTimeout(() => {
+                    button.textContent = 'コピー';
+                }, 2000);
+            });
+        }
+
+        function showTooltip(element, x, y) {
+            const data = subassemblies[currentSubassembly].codes[element];
+            if (!data) {
+                tooltip.classList.remove('visible');
+                return;
+            }
+
+            let html = `<div class="tooltip-element">${element}</div>`;
+            data.forEach(item => {
+                html += `
+                    <div class="tooltip-item">
+                        <div class="code-badge">CODE</div>
+                        <div class="tooltip-code-name">${item.code}</div>
+                        <div class="tooltip-jpname">${item.jpCode}</div>
+                        <div class="tooltip-description">${item.description}</div>
+                    </div>
+                `;
+            });
+
+            tooltip.innerHTML = html;
+            tooltip.classList.add('visible');
+            
+            // ツールチップのサイズを取得
+            const tooltipRect = tooltip.getBoundingClientRect();
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            
+            // デフォルトの位置（右下）
+            let tooltipX = x + 15;
+            let tooltipY = y + 15;
+            
+            // 画面右端からはみ出る場合は左に表示
+            if (tooltipX + tooltipRect.width > windowWidth) {
+                tooltipX = x - tooltipRect.width - 15;
+            }
+            
+            // 画面下端からはみ出る場合は上に表示
+            if (tooltipY + tooltipRect.height > windowHeight) {
+                tooltipY = y - tooltipRect.height - 15;
+            }
+            
+            // 左端からはみ出ないように調整
+            if (tooltipX < 0) {
+                tooltipX = 15;
+            }
+            
+            // 上端からはみ出ないように調整
+            if (tooltipY < 0) {
+                tooltipY = 15;
+            }
+            
+            tooltip.style.left = tooltipX + 'px';
+            tooltip.style.top = tooltipY + 'px';
+        }
+
+        function hideTooltip() {
+            tooltip.classList.remove('visible');
+        }
+
+        // イベントリスナー
+        svgContainer.addEventListener('click', (e) => {
+            if (e.target.tagName === 'text' || e.target.tagName === 'tspan') {
+                const text = e.target.textContent.trim();
+                const textElement = e.target.tagName === 'tspan' ? e.target.parentElement : e.target;
+                
+                if (subassemblies[currentSubassembly].codes[text]) {
+                    renderInfoPanel(text);
+                    highlightElement(textElement);
+                }
+            }
+        });
+
+        svgContainer.addEventListener('mousemove', (e) => {
+            if (e.target.tagName === 'text' || e.target.tagName === 'tspan') {
+                const text = e.target.textContent.trim();
+                if (subassemblies[currentSubassembly].codes[text]) {
+                    showTooltip(text, e.clientX, e.clientY);
+                    return;
+                }
+            }
+            hideTooltip();
+        });
+
+        svgContainer.addEventListener('mouseleave', () => {
+            hideTooltip();
+        });
+
+        // 初期化
+        generateSidebarMenu();
+        selectSubassembly(menuOrder[0]); // 最初の項目を選択
+
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 【クイックリファレンス】
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        // 
+        // ■ メニューの順番を変更したい場合
+        // → 418行目付近の menuOrder 配列の順序を変更
+        // 
+        // ■ 新しいサブアセンブリを追加したい場合
+        // → 上記の手順書（418行目〜）を参照
+        // 
+        // ■ Claudeに依頼する場合の指示例
+        // 「このHTMLファイルに、新しいサブアセンブリ『○○』を追加してください。
+        //  CSVファイルとSVGファイル（TXT）を添付します。
+        //  ファイル内の手順書に従って追加してください。」
+        // 
+        // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    </script>
+</body>
+</html>
